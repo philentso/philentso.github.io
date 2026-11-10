@@ -1,11 +1,466 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <title>philentso个人主页</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>task-board 项目说明 · Myproject mp-task-board</title>
+<meta name="description" content="task-board：查看 Kubernetes CronJob 流水线运行情况的只读 Web 看板（FastAPI + 原生 JS）的项目说明。">
+<style>
+/* 配色沿用看板本身的状态色：成功绿、运行黄、失败红，其余用冷灰蓝 */
+:root {
+  --bg: #f2f5f8;
+  --surface: #ffffff;
+  --ink: #16212c;
+  --muted: #5d6b79;
+  --line: #d8e0e8;
+  --accent: #1f6feb;
+  --accent-soft: #e6effd;
+  --ok-bg: #d9f3e6;  --ok-fg: #0b5a3a;
+  --run-bg: #fdecc4; --run-fg: #7a4a06;
+  --fail-bg: #fbdada; --fail-fg: #8e1f1f;
+  --code-bg: #0f1b26; --code-fg: #dbe6f0;
+  --inline-bg: #e8eef4;
+  --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e151c; --surface: #151f29; --ink: #e5edf4; --muted: #93a4b4; --line: #26343f;
+    --accent: #5aa2ff; --accent-soft: #172a42;
+    --ok-bg: #12382a; --ok-fg: #8de0b6;
+    --run-bg: #3d2f10; --run-fg: #f3cd7b;
+    --fail-bg: #431c1c; --fail-fg: #f4a3a3;
+    --code-bg: #0a1118; --code-fg: #d3dfea; --inline-bg: #1f2c38;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e151c; --surface: #151f29; --ink: #e5edf4; --muted: #93a4b4; --line: #26343f;
+  --accent: #5aa2ff; --accent-soft: #172a42;
+  --ok-bg: #12382a; --ok-fg: #8de0b6;
+  --run-bg: #3d2f10; --run-fg: #f3cd7b;
+  --fail-bg: #431c1c; --fail-fg: #f4a3a3;
+  --code-bg: #0a1118; --code-fg: #d3dfea; --inline-bg: #1f2c38;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 20px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.75 var(--sans); }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+.layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 48px;
+          max-width: 1120px; margin: 0 auto; padding: 40px 24px 80px; }
+
+/* 左侧目录 */
+.toc { position: sticky; top: 24px; align-self: start; max-height: calc(100vh - 48px); overflow-y: auto;
+       font-size: 14px; line-height: 1.5; }
+.toc strong { display: block; margin-bottom: 10px; font-size: 15px; }
+.toc ol { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--line); }
+.toc a { display: block; padding: 6px 0 6px 14px; margin-left: -1px; color: var(--muted);
+         text-decoration: none; border-left: 2px solid transparent; }
+.toc a:hover { color: var(--ink); }
+.toc a.on { color: var(--accent); border-left-color: var(--accent); font-weight: 600; }
+.toc .tools { margin-top: 18px; display: flex; gap: 8px; }
+.toc button { font: inherit; font-size: 12px; padding: 4px 10px; border: 1px solid var(--line);
+              background: var(--surface); color: var(--muted); border-radius: 6px; cursor: pointer; }
+.toc button:hover { color: var(--ink); }
+
+main { min-width: 0; max-width: 780px; }
+h1 { font-size: 34px; line-height: 1.25; margin: 0 0 14px; letter-spacing: -0.01em; }
+h2 { font-size: 24px; line-height: 1.3; margin: 56px 0 16px; padding-top: 24px; border-top: 1px solid var(--line); }
+h2:first-of-type { margin-top: 40px; }
+h3 { font-size: 17px; margin: 30px 0 8px; }
+p { margin: 0 0 14px; }
+.lead { font-size: 18px; color: var(--muted); margin-bottom: 20px; }
+ul, ol { padding-left: 1.4em; margin: 0 0 14px; }
+li { margin: 4px 0; }
+
+code { font: 0.88em var(--mono); background: var(--inline-bg); padding: 1px 6px; border-radius: 4px; }
+pre { position: relative; margin: 14px 0 18px; padding: 14px 16px; overflow-x: auto; border-radius: 8px;
+      background: var(--code-bg); color: var(--code-fg); font: 13px/1.65 var(--mono); }
+pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
+pre .cmt { color: #7f93a6; }
+.copy { position: absolute; top: 8px; right: 8px; font: 12px var(--sans); padding: 3px 9px; border-radius: 5px;
+        border: 1px solid #34495b; background: #1a2a38; color: #c4d3df; cursor: pointer; }
+.copy:hover { background: #22364a; }
+
+.tw { overflow-x: auto; margin: 12px 0 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.55; }
+th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+th { font-weight: 600; background: var(--accent-soft); white-space: nowrap; }
+td:first-child { white-space: nowrap; }
+
+.tag { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 1.7; }
+.t-ok { background: var(--ok-bg); color: var(--ok-fg); }
+.t-run { background: var(--run-bg); color: var(--run-fg); }
+.t-fail { background: var(--fail-bg); color: var(--fail-fg); }
+
+.note { margin: 16px 0; padding: 12px 16px; border-left: 3px solid var(--accent); background: var(--accent-soft);
+        border-radius: 0 8px 8px 0; font-size: 15px; }
+.note.warn { border-left-color: #d98a00; background: var(--run-bg); color: var(--run-fg); }
+
+/* 流程图 */
+.flow { margin: 18px 0 8px; padding: 14px 8px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.flow svg { display: block; width: 100%; height: auto; }
+.flow .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.4; }
+.flow .box.snap { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.8; }
+.flow .t1 { fill: var(--ink); font: 600 14px var(--sans); }
+.flow .t2 { fill: var(--muted); font: 12px var(--sans); }
+.flow .lane { fill: var(--muted); font: 600 13px var(--sans); }
+.flow .ln { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+.flow .ln.hot { stroke: var(--accent); stroke-width: 2; }
+.flow .mk { fill: var(--muted); }
+.flow .mk.hot { fill: var(--accent); }
+.flow .tip { fill: var(--accent); font: 600 13px var(--sans); }
+figcaption { color: var(--muted); font-size: 14px; margin: 8px 2px 16px; }
+figure { margin: 0; }
+
+footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 8px; padding-top: 24px; }
+  .toc { position: static; max-height: none; border: 1px solid var(--line); border-radius: 10px;
+         padding: 14px 16px; background: var(--surface); }
+  .toc ol { border-left: none; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+  .toc a { padding: 2px 0; border-left: none; margin-left: 0; }
+  h1 { font-size: 28px; }
+  h2 { font-size: 21px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
 </head>
 <body>
-    <h1>PhilenTso</h1>
-    <p>philentso GitHub Pages欢迎你。</p>
+<div class="layout">
+
+<nav class="toc" aria-label="目录">
+  <strong>目录</strong>
+  <ol>
+    <li><a href="#intro">项目是什么</a></li>
+    <li><a href="#flow">整体工作流程</a></li>
+    <li><a href="#tree">目录结构</a></li>
+    <li><a href="#config">config.py 配置</a></li>
+    <li><a href="#k8s">k8s_client.py</a></li>
+    <li><a href="#agg">aggregator.py</a></li>
+    <li><a href="#main">main.py 入口</a></li>
+    <li><a href="#front">前端文件</a></li>
+    <li><a href="#api">接口与数据结构</a></li>
+    <li><a href="#deploy-files">部署清单</a></li>
+    <li><a href="#local">本地运行</a></li>
+    <li><a href="#cluster">部署到集群</a></li>
+    <li><a href="#python">读代码的几个写法</a></li>
+  </ol>
+  <div class="tools"><button id="theme" type="button">切换深浅色</button></div>
+</nav>
+
+<main>
+<h1>task-board 项目说明</h1>
+<p class="lead">一个只读的 Web 看板，用来查看 <code>task-pipeline</code> 命名空间里流水线的运行情况。页面标题为 Myproject · mp-task-board。</p>
+
+<h2 id="intro">项目是什么</h2>
+<ul>
+  <li><strong>后端</strong>：Python + FastAPI，通过 Kubernetes API 读取 CronJob、Job、Pod、Deployment 等资源，整理后提供给页面。</li>
+  <li><strong>前端</strong>：纯 HTML、JS、CSS，没有框架，不需要编译。</li>
+  <li><strong>部署</strong>：打成 Docker 镜像，以 Deployment 的方式跑在集群里，通过 Service 和 Ingress（<code>task-board.mp.com</code>）访问。程序没有任何写权限。</li>
+</ul>
+<p>页面有 4 个标签页：</p>
+<div class="tw"><table>
+  <tr><th>标签页</th><th>内容</th></tr>
+  <tr><td>任务总览</td><td>每个 CronJob 的调度、下次运行、成功率、最近失败原因，以及调度异常标记</td></tr>
+  <tr><td>运行中 Pod</td><td>Running 和 Pending 的 Pod，未就绪的排在最前，带重启次数和最近重启原因</td></tr>
+  <tr><td>最近执行</td><td>最近的 Job，含耗时、重试次数和失败原因</td></tr>
+  <tr><td>常驻服务</td><td>Deployment、StatefulSet、DaemonSet、Service</td></tr>
+</table></div>
+
+<h2 id="flow">整体工作流程</h2>
+<p>关键点：<strong>浏览器请求不会触发访问 k8s</strong>，只读内存里已经算好的结果。这是解决页面卡顿的核心。</p>
+
+<figure class="flow">
+<svg viewBox="0 0 760 262" role="img" aria-labelledby="flow-t flow-d">
+  <title id="flow-t">数据流程图</title>
+  <desc id="flow-d">后台线程每 5 秒从 k8s API 拉取数据，经 aggregator 整理后存成内存快照；浏览器每 10 秒请求 /api/overview，直接读取快照。</desc>
+  <defs>
+    <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mk"/></marker>
+    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mk hot"/></marker>
+  </defs>
+
+  <text class="lane" x="10" y="20">后台线程 · 每 5 秒</text>
+  <rect class="box" x="10"  y="32" width="150" height="66" rx="8"/>
+  <text class="t1" x="85"  y="60" text-anchor="middle">k8s API</text>
+  <text class="t2" x="85"  y="80" text-anchor="middle">命名空间内的资源</text>
+
+  <rect class="box" x="205" y="32" width="150" height="66" rx="8"/>
+  <text class="t1" x="280" y="60" text-anchor="middle">k8s_client.py</text>
+  <text class="t2" x="280" y="80" text-anchor="middle">并行拉取 7 类资源</text>
+
+  <rect class="box" x="400" y="32" width="150" height="66" rx="8"/>
+  <text class="t1" x="475" y="60" text-anchor="middle">aggregator.py</text>
+  <text class="t2" x="475" y="80" text-anchor="middle">整理成页面要的结构</text>
+
+  <rect class="box snap" x="595" y="32" width="155" height="66" rx="8"/>
+  <text class="t1" x="672" y="60" text-anchor="middle">内存快照</text>
+  <text class="t2" x="672" y="80" text-anchor="middle">main.py · JSON + gzip</text>
+
+  <path class="ln" d="M160 65H203" marker-end="url(#a1)"/>
+  <path class="ln" d="M355 65H398" marker-end="url(#a1)"/>
+  <path class="ln" d="M550 65H593" marker-end="url(#a1)"/>
+
+  <text class="lane" x="10" y="150">浏览器 · 每 10 秒</text>
+  <rect class="box" x="400" y="162" width="150" height="66" rx="8"/>
+  <text class="t1" x="475" y="190" text-anchor="middle">app.js</text>
+  <text class="t2" x="475" y="210" text-anchor="middle">refresh() 渲染表格</text>
+
+  <rect class="box" x="595" y="162" width="155" height="66" rx="8"/>
+  <text class="t1" x="672" y="190" text-anchor="middle">/api/overview</text>
+  <text class="t2" x="672" y="210" text-anchor="middle">main.py 返回快照</text>
+
+  <path class="ln" d="M550 184H593" marker-end="url(#a1)"/>
+  <path class="ln" d="M593 208H552" marker-end="url(#a1)"/>
+  <path class="ln hot" d="M672 162V100" marker-end="url(#a2)"/>
+  <text class="tip" x="684" y="136">只读内存</text>
+
+  <text class="t2" x="10" y="190">页面请求不会访问 k8s API，</text>
+  <text class="t2" x="10" y="210">所以请求再多也不会拖慢集群。</text>
+</svg>
+</figure>
+<figcaption>后台线程负责“算”，接口只负责“端”。快照由 <code>_refresh_loop()</code> 更新，接口读到的永远是完整的一份。</figcaption>
+
+<h2 id="tree">目录结构</h2>
+<pre><code>task-board-src/
+├── Dockerfile              <span class="cmt"># 镜像构建脚本</span>
+├── requirements.txt        <span class="cmt"># Python 依赖清单</span>
+├── app/                    <span class="cmt"># 程序本体</span>
+│   ├── __init__.py         <span class="cmt"># 空文件，让 app 成为 Python “包”</span>
+│   ├── main.py             <span class="cmt"># 入口：Web 服务、后台刷新线程、接口</span>
+│   ├── config.py           <span class="cmt"># 配置：全部来自环境变量</span>
+│   ├── k8s_client.py       <span class="cmt"># 访问 k8s API：并行拉取 7 类资源</span>
+│   ├── aggregator.py       <span class="cmt"># 数据整理：把 k8s 原始数据算成页面要的结构</span>
+│   └── static/             <span class="cmt"># 前端文件，浏览器直接下载</span>
+│       ├── index.html      <span class="cmt"># 页面骨架</span>
+│       ├── app.js          <span class="cmt"># 页面逻辑：拉数据、渲染表格、日志弹窗</span>
+│       └── style.css       <span class="cmt"># 样式</span>
+└── deploy/                 <span class="cmt"># 部署到 k8s 的清单</span>
+    ├── rbac.yaml           <span class="cmt"># ServiceAccount + 只读权限</span>
+    ├── deployment.yaml     <span class="cmt"># Deployment + Service</span>
+    └── ingress.yaml        <span class="cmt"># Ingress，域名 task-board.mp.com</span></code></pre>
+
+<h2 id="config">config.py：配置</h2>
+<p>只做一件事：读环境变量并给默认值。<code>_bool()</code> 把 <code>"1"</code>、<code>"true"</code>、<code>"yes"</code>、<code>"on"</code> 当作真。</p>
+<div class="tw"><table>
+  <tr><th>环境变量</th><th>默认值</th><th>作用</th></tr>
+  <tr><td><code>NAMESPACE</code></td><td>task-pipeline</td><td>要查看的命名空间</td></tr>
+  <tr><td><code>DISPLAY_TZ</code></td><td>Asia/Shanghai</td><td>页面显示时间用的时区</td></tr>
+  <tr><td><code>COMPANY_NAME</code> / <code>PIPELINE_NAME</code></td><td>Myproject / mp-task-board</td><td>页面标题</td></tr>
+  <tr><td><code>REFRESH_INTERVAL</code></td><td>5</td><td>后台每隔几秒刷新一次快照</td></tr>
+  <tr><td><code>K8S_TIMEOUT</code></td><td>25</td><td>访问 k8s 的读超时（秒）</td></tr>
+  <tr><td><code>RECENT_PER_CJ</code></td><td>20</td><td>每个 CronJob 统计最近多少个 Job（算成功率）</td></tr>
+  <tr><td><code>RECENT_JOBS_LIMIT</code></td><td>300</td><td>“最近执行”页最多返回多少条</td></tr>
+  <tr><td><code>ENABLE_LOGS</code></td><td>0</td><td>是否开启日志查看</td></tr>
+  <tr><td><code>LOG_MAX_BYTES</code></td><td>512KB</td><td>单次日志最大体积</td></tr>
+  <tr><td><code>UI_USER</code> / <code>UI_PASS</code></td><td>空</td><td>两个都设置才启用 Basic 登录</td></tr>
+</table></div>
+
+<h2 id="k8s">k8s_client.py：访问 k8s</h2>
+<div class="tw"><table>
+  <tr><th>名字</th><th>说明</th></tr>
+  <tr><td><code>_build_clients()</code></td><td>先尝试用集群内的 ServiceAccount 登录（<code>load_incluster_config</code>），失败就读本地 <code>~/.kube/config</code>，所以本地和集群里都能跑</td></tr>
+  <tr><td><code>BATCH, CORE, APPS</code></td><td>三类 API 客户端：Job 和 CronJob 属于 batch，Pod 和 Service 属于 core，Deployment 等属于 apps</td></tr>
+  <tr><td><code>_list(fn)</code></td><td>调用某个“列出资源”的函数，拿到<strong>原始响应</strong>（<code>_preload_content=False</code>）后自己 <code>json.loads</code>，比 SDK 转成对象快很多</td></tr>
+  <tr><td><code>_LOADERS</code></td><td>一张字典：名字对应各自的 list 函数，共 7 项</td></tr>
+  <tr><td><code>fetch_all()</code></td><td>用线程池<strong>并行</strong>拉这 7 类资源，返回 <code>{"cronjobs": [...], "jobs": [...], ...}</code></td></tr>
+</table></div>
+
+<h2 id="agg">aggregator.py：数据整理</h2>
+<p>最长的文件。输入是 k8s 原始 dict，输出是页面直接能用的数据。</p>
+
+<h3>小工具函数</h3>
+<div class="tw"><table>
+  <tr><th>函数</th><th>说明</th></tr>
+  <tr><td><code>_g(d, "a", "b")</code></td><td>逐层取值，中间缺了就返回默认值，不会报错</td></tr>
+  <tr><td><code>_ts(s)</code></td><td>把 k8s 的时间字符串转成秒级时间戳</td></tr>
+  <tr><td><code>_dur(start, end)</code></td><td>两个时间戳相减，得到耗时</td></tr>
+  <tr><td><code>_short_image</code> / <code>_first_image</code></td><td>取容器镜像并缩短显示：去掉仓库域名，把长 digest 缩成 8 位</td></tr>
+  <tr><td><code>_next_run</code></td><td>用 croniter 算下次触发时间，<strong>按 CronJob 自己的时区</strong>算，没写就是 UTC</td></tr>
+  <tr><td><code>_cron_gap</code></td><td>算未来 12 次触发之间的最大间隔，用来判断“多久没调度算异常”</td></tr>
+</table></div>
+
+<h3>Pod 相关</h3>
+<div class="tw"><table>
+  <tr><th>函数</th><th>说明</th></tr>
+  <tr><td><code>_job_name_of_pod</code></td><td>从 Pod 的标签里找它属于哪个 Job</td></tr>
+  <tr><td><code>_pod_term_reason</code></td><td>找 Pod 里第一个“非 0 退出”的容器原因，例如 <code>OOMKilled(exit 137)</code></td></tr>
+  <tr><td><code>_pod_status</code></td><td>仿 kubectl 的 STATUS 列，返回状态、就绪数（如 <code>0/1</code>）、是否全部就绪</td></tr>
+  <tr><td><code>_workload_of</code></td><td>判断 Pod 归属：Job 归到 CronJob，ReplicaSet 归到 Deployment（去掉末尾 hash）</td></tr>
+</table></div>
+
+<h3>Job 和 CronJob</h3>
+<div class="tw"><table>
+  <tr><th>函数</th><th>说明</th></tr>
+  <tr><td><code>_job_phase</code></td><td>根据 Job 的 conditions 判断 <span class="tag t-ok">Success</span> <span class="tag t-fail">Failed</span> <span class="tag t-run">Running</span> 或 Pending</td></tr>
+  <tr><td><code>_job_view</code></td><td>给每个 Job 生成页面用的视图：状态、起止时间、耗时、失败原因、最新的 Pod 名。失败 Job 的结束时间取失败那一刻</td></tr>
+  <tr><td><code>_cronjob_of</code></td><td>判断某个 Job 属于哪个 CronJob</td></tr>
+  <tr><td><code>build_cronjobs</code></td><td>为每个 CronJob 汇总成功率、最近失败、下次运行时间，并判断<strong>调度异常</strong>：Forbid 策略下 Job 跑得比周期还长标 <code>blocked</code>，超过 2 个周期没新 Job 标 <code>stale</code></td></tr>
+</table></div>
+
+<h3>页面数据</h3>
+<div class="tw"><table>
+  <tr><th>函数</th><th>说明</th></tr>
+  <tr><td><code>build_pods</code></td><td>生成“运行中 Pod”列表（包含 Pending 和未就绪的），没就绪的排最前，并带最近一次重启的原因和时间</td></tr>
+  <tr><td><code>_match_pods</code> / <code>_pod_stats</code> / <code>_replicas</code></td><td>按 Deployment 的标签选择器找到它的 Pod，统计运行数、重启数</td></tr>
+  <tr><td><code>build_workloads</code></td><td>生成 Deployment、StatefulSet、DaemonSet、Service 四张表</td></tr>
+  <tr><td><code>build_overview</code></td><td><strong>总入口</strong>：依次调用上面所有函数，再汇总出顶部卡片的计数和分组统计，返回最终数据</td></tr>
+</table></div>
+
+<h2 id="main">main.py：入口</h2>
+<div class="tw"><table>
+  <tr><th>部分</th><th>说明</th></tr>
+  <tr><td><code>Snapshot</code> / <code>SNAP</code></td><td>内存里存快照的地方，<code>state</code> 保存（JSON 字节、gzip 字节、生成时间），<code>error</code> 保存最近一次刷新失败的原因</td></tr>
+  <tr><td><code>_refresh_loop()</code></td><td>后台线程里的无限循环：拉数据，整理，转 JSON，存快照，再睡到下一个周期。出错只记录原因，不退出</td></tr>
+  <tr><td><code>lifespan</code></td><td>程序启动时把 <code>_refresh_loop</code> 作为后台线程开起来</td></tr>
+  <tr><td><code>basic_auth</code></td><td>中间件：设置了 <code>UI_USER</code> 和 <code>UI_PASS</code> 时，每个请求先检查登录（<code>/healthz</code> 除外），密码用 <code>compare_digest</code> 比较，防止通过响应时间猜密码</td></tr>
+  <tr><td><code>GET /</code></td><td>返回 <code>index.html</code></td></tr>
+  <tr><td><code>GET /healthz</code></td><td>健康检查，给 k8s 的探针用</td></tr>
+  <tr><td><code>GET /api/overview</code></td><td>返回快照。浏览器支持 gzip 就返回压缩版；没有快照返回 503；响应头带 <code>X-Snapshot-Age</code>（数据多旧）和 <code>X-Snapshot-Error</code>（刷新失败原因）</td></tr>
+  <tr><td><code>GET /api/pods/{name}/logs</code></td><td>读 Pod 日志，<strong>仅 <code>ENABLE_LOGS=1</code> 时可用</strong>。会校验 Pod 名格式，限制行数（最多 5000）和体积</td></tr>
+  <tr><td><code>/api/docs</code></td><td>FastAPI 自动生成的接口文档页面</td></tr>
+</table></div>
+
+<h2 id="front">前端文件</h2>
+<ul>
+  <li><strong>index.html</strong>：页面骨架，包括顶部标题和刷新开关、提示条、统计卡片、4 个标签页的表格和筛选框、日志弹窗。</li>
+  <li><strong>app.js</strong>，按功能分段：
+    <ul>
+      <li>格式化时间和耗时，<code>esc()</code> 对文本做转义。</li>
+      <li>每个标签页一个渲染函数：<code>renderCronjobs</code>、<code>renderPods</code>、<code>renderJobs</code>、<code>renderWorkloads</code>。</li>
+      <li><code>refresh()</code> 拉数据：<strong>上一次没回来不发下一次</strong>，20 秒超时，标签页隐藏时暂停轮询。</li>
+      <li>日志弹窗：<code>openLogs</code>、<code>loadLogs</code>。</li>
+      <li>事件绑定统一挂在 <code>document</code> 上，因为表格每次重绘，挂在行上会失效。</li>
+    </ul>
+  </li>
+  <li><strong>style.css</strong>：卡片、表格、徽章（成功绿、失败红、运行黄）、日志弹窗样式。</li>
+</ul>
+
+<h2 id="api">接口与数据结构</h2>
+<p><code>/api/overview</code> 返回一个 JSON，主要字段：</p>
+<div class="tw"><table>
+  <tr><th>字段</th><th>内容</th></tr>
+  <tr><td><code>meta</code></td><td>名称、命名空间、时区、是否开启日志、后端构建耗时</td></tr>
+  <tr><td><code>counts</code></td><td>顶部卡片的各项计数</td></tr>
+  <tr><td><code>groups</code></td><td>按任务名第一段分组的统计</td></tr>
+  <tr><td><code>cronjobs</code></td><td>任务总览表的每一行</td></tr>
+  <tr><td><code>running_pods</code></td><td>运行中 Pod 表</td></tr>
+  <tr><td><code>recent_jobs</code></td><td>最近执行表</td></tr>
+  <tr><td><code>workloads</code></td><td><code>deployments</code> / <code>statefulsets</code> / <code>daemonsets</code> / <code>services</code></td></tr>
+</table></div>
+
+<h2 id="deploy-files">部署清单</h2>
+<div class="tw"><table>
+  <tr><th>文件</th><th>说明</th></tr>
+  <tr><td>Dockerfile</td><td>基于 <code>python:3.11-slim</code>，安装依赖，拷贝 <code>app</code>，用 uvicorn 启动。<strong>只能 1 个 worker</strong>，因为后台刷新线程每个进程各跑一份，开多个只会重复访问 k8s</td></tr>
+  <tr><td>requirements.txt</td><td>fastapi（Web 框架）、uvicorn（运行它的服务器）、kubernetes（k8s SDK）、croniter（解析 cron 表达式）、tzdata（时区数据）</td></tr>
+  <tr><td>deploy/rbac.yaml</td><td>给程序一个 ServiceAccount，只授予读取 jobs、cronjobs、pods、services、deployments 等的权限，外加读日志（<code>pods/log</code>）。程序没有任何写权限</td></tr>
+  <tr><td>deploy/deployment.yaml</td><td>Deployment 里是环境变量、资源限制、健康探针；Service 是 ClusterIP，80 端口转到容器 8080</td></tr>
+  <tr><td>deploy/ingress.yaml</td><td>把 <code>task-board.mp.com</code> 转发到 Service</td></tr>
+</table></div>
+
+<h2 id="local">本地运行</h2>
+<p>需要 Python 3.10 以上，并且这台机器的 <code>kubectl</code> 能连上集群。程序会自动读 <code>~/.kube/config</code>。</p>
+<ol>
+  <li>建一个独立的 Python 环境，依赖只装在里面，不污染系统：
+<pre><code>cd task-board-src
+python3 -m venv .venv
+source .venv/bin/activate</code></pre></li>
+  <li>安装依赖：
+<pre><code>pip install -r requirements.txt</code></pre></li>
+  <li>确认能连集群，这一步不通，页面一定没数据：
+<pre><code>kubectl -n task-pipeline get cronjob</code></pre></li>
+  <li>启动，想看日志就加上 <code>ENABLE_LOGS=1</code>：
+<pre><code>ENABLE_LOGS=1 uvicorn app.main:app --host 127.0.0.1 --port 8080</code></pre></li>
+  <li>浏览器打开 <code>http://127.0.0.1:8080</code>。停止服务按 <code>Ctrl+C</code>。</li>
+</ol>
+<p><code>app.main:app</code> 的意思是：<code>app</code> 目录下 <code>main.py</code> 文件里名叫 <code>app</code> 的对象。</p>
+<div class="tw"><table>
+  <tr><th>现象</th><th>原因和处理</th></tr>
+  <tr><td><code>No module named 'app'</code></td><td>目录不对，要在含有 <code>app</code> 文件夹的那一层执行 uvicorn</td></tr>
+  <tr><td>找不到 kubeconfig</td><td>这台机器没有 <code>~/.kube/config</code>，先让 <code>kubectl</code> 能用</td></tr>
+  <tr><td>页面顶部提示 403 Forbidden</td><td>你的 kubeconfig 账号没有读该命名空间的权限</td></tr>
+  <tr><td>显示“正在生成第一份数据”</td><td>正常，等几秒，第一次拉数据需要一点时间</td></tr>
+</table></div>
+
+<h2 id="cluster">部署到集群</h2>
+<ol>
+  <li>创建命名空间（如果还没有）：
+<pre><code>kubectl create namespace task-pipeline</code></pre></li>
+  <li>构建并推送镜像，然后把 <code>deploy/deployment.yaml</code> 里的镜像名和 tag 改成实际值。</li>
+  <li>依次应用清单：
+<pre><code>kubectl apply -f deploy/rbac.yaml
+kubectl apply -f deploy/deployment.yaml
+kubectl apply -f deploy/ingress.yaml</code></pre></li>
+  <li>验证。最后一条会走 Ingress，不用先配 DNS 就能测试：
+<pre><code>kubectl -n task-pipeline get deploy,svc,ingress
+kubectl -n task-pipeline logs deploy/task-board
+curl -H 'Host: task-board.mp.com' http://&lt;节点IP&gt;/</code></pre></li>
+</ol>
+<div class="note warn">域名对外可访问后，建议先创建登录用的 Secret（<code>task-board-auth</code>），再把 <code>ENABLE_LOGS</code> 改成 <code>"1"</code>。Basic 认证在 HTTP 下密码是明文，最好配上 HTTPS。</div>
+<div class="note">Ingress 没写 <code>ingressClassName</code>，会走集群默认的控制器（k3s 默认是 traefik）。如果装了多个控制器，用 <code>kubectl get ingressclass</code> 查看名字，再在 <code>ingress.yaml</code> 里取消注释并填上。</div>
+
+<h2 id="python">读 Python 代码的几个写法</h2>
+<div class="tw"><table>
+  <tr><th>写法</th><th>含义</th></tr>
+  <tr><td><code>def f():</code></td><td>定义函数；<code>async def</code> 是异步函数，Web 接口里不做耗时操作时用它</td></tr>
+  <tr><td><code>d.get("k")</code></td><td>取字典的值，没有这个键就返回 <code>None</code>，不会像 <code>d["k"]</code> 那样报错</td></tr>
+  <tr><td><code>[x for x in 列表 if 条件]</code></td><td>列表推导式：从列表里挑出满足条件的元素，组成新列表</td></tr>
+  <tr><td><code>f"{a}/{b}"</code></td><td>f-string，把变量直接嵌进字符串</td></tr>
+  <tr><td><code>try / except / finally</code></td><td><code>try</code> 里出错就跳到 <code>except</code>；<code>finally</code> 里的代码无论成败都会执行</td></tr>
+  <tr><td><code>@app.get("/路径")</code></td><td>装饰器：浏览器用 GET 访问这个路径时，调用下面这个函数</td></tr>
+  <tr><td><code>with 资源:</code></td><td>在这个代码块里使用某个资源（如线程池），结束时自动清理</td></tr>
+</table></div>
+
+<footer>task-board · Myproject mp-task-board</footer>
+</main>
+</div>
+
+<script>
+(function () {
+  // 代码块加“复制”按钮
+  document.querySelectorAll('pre').forEach(function (pre) {
+    if (pre.querySelector('.cmt') && pre.textContent.indexOf('task-board-src/') === 0) return; // 目录树不需要复制
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'copy'; b.textContent = '复制';
+    b.addEventListener('click', function () {
+      var text = pre.querySelector('code').innerText;
+      var done = function () { b.textContent = '已复制'; setTimeout(function () { b.textContent = '复制'; }, 1500); };
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done);
+      else { var t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select();
+             try { document.execCommand('copy'); done(); } catch (e) {} document.body.removeChild(t); }
+    });
+    pre.appendChild(b);
+  });
+
+  // 目录随滚动高亮
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  var map = {};
+  links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (e.isIntersecting) { links.forEach(function (a) { a.classList.remove('on'); }); map[e.target.id].classList.add('on'); }
+      });
+    }, { rootMargin: '0px 0px -75% 0px' });
+    Object.keys(map).forEach(function (id) { var el = document.getElementById(id); if (el) io.observe(el); });
+  }
+
+  // 深浅色切换（默认跟随系统，选择后记住）
+  var root = document.documentElement;
+  try { var saved = localStorage.getItem('tb-theme'); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
+  document.getElementById('theme').addEventListener('click', function () {
+    var cur = root.getAttribute('data-theme') ||
+      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    var next = cur === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('tb-theme', next); } catch (e) {}
+  });
+})();
+</script>
 </body>
 </html>
