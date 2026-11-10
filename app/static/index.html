@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Myproject · mp-task-board</title>
+<link rel="stylesheet" href="/static/style.css?v=4">
+</head>
+<body>
+<header>
+  <div>
+    <h1><span id="company">Myproject</span> <span class="dim">·</span> <span id="pipeline">mp-task-board</span></h1>
+    <p class="sub" id="meta"></p>
+  </div>
+  <div class="controls">
+    <label><input type="checkbox" id="auto" checked> 自动刷新(10s)</label>
+    <button id="refresh">刷新</button>
+    <span class="dot" id="live-dot" title="绿=正常 黄=数据偏旧 红=出错"></span>
+  </div>
+</header>
+
+<div id="banner" class="banner" hidden></div>
+
+<section class="cards" id="cards"></section>
+
+<nav class="tabs">
+  <button data-tab="cj" class="active">任务总览</button>
+  <button data-tab="pods">运行中 Pod</button>
+  <button data-tab="jobs">最近执行</button>
+  <button data-tab="wl">常驻服务</button>
+</nav>
+
+<!-- Tab 1: CronJob -->
+<section id="tab-cj">
+  <div class="filterbar">
+    <input id="q-cj" placeholder="搜索任务名…">
+    <select id="st-cj">
+      <option value="">全部状态</option>
+      <option value="running">运行中</option>
+      <option value="failed">上次失败</option>
+      <option value="flagged">调度异常</option>
+      <option value="suspended">已挂起</option>
+    </select>
+    <div id="groups" class="chips"></div>
+  </div>
+  <div class="tblwrap"><table class="tbl">
+    <thead><tr>
+      <th>任务</th><th>Schedule</th><th>下次</th><th>上次调度</th><th>上次耗时</th>
+      <th>成功率</th><th>状态</th><th>活跃</th><th>最近失败</th>
+    </tr></thead>
+    <tbody id="tb-cj"></tbody>
+  </table></div>
+</section>
+
+<!-- Tab 2: Pod -->
+<section id="tab-pods" hidden>
+  <div class="filterbar">
+    <input id="q-pod" placeholder="搜索 Pod / 归属 / 节点…">
+    <label><input type="checkbox" id="pod-abn"> 只看异常（未就绪）</label>
+  </div>
+  <div class="tblwrap"><table class="tbl">
+    <thead><tr>
+      <th>Pod</th><th>归属</th><th>状态</th><th>Ready</th><th>已运行</th><th>重启</th><th>节点</th><th></th>
+    </tr></thead>
+    <tbody id="tb-pods"></tbody>
+  </table></div>
+</section>
+
+<!-- Tab 3: Job -->
+<section id="tab-jobs" hidden>
+  <div class="filterbar">
+    <input id="q-job" placeholder="搜索 Job / 任务名…">
+    <select id="phase-filter">
+      <option value="">全部状态</option>
+      <option value="Running">Running</option>
+      <option value="Success">Success</option>
+      <option value="Failed">Failed</option>
+      <option value="Pending">Pending</option>
+    </select>
+  </div>
+  <div class="tblwrap"><table class="tbl">
+    <thead><tr>
+      <th>Job</th><th>任务</th><th>状态</th><th>开始</th><th>结束</th><th>耗时</th><th>重试</th><th>失败原因</th><th></th>
+    </tr></thead>
+    <tbody id="tb-jobs"></tbody>
+  </table></div>
+</section>
+
+<!-- Tab 4: 常驻服务 -->
+<section id="tab-wl" hidden>
+  <div class="filterbar">
+    <label><input type="checkbox" id="hide-zero" checked> 隐藏已缩容(0 副本)</label>
+    <span class="dim" id="zero-hint"></span>
+  </div>
+  <h3 class="section-title">Deployment</h3>
+  <div class="tblwrap"><table class="tbl">
+    <thead><tr><th>名称</th><th>Ready</th><th>镜像</th><th>Age</th><th>Pods(running/total)</th><th>状态</th></tr></thead>
+    <tbody id="tb-deploy"></tbody>
+  </table></div>
+
+  <h3 class="section-title">StatefulSet</h3>
+  <div class="tblwrap"><table class="tbl">
+    <thead><tr><th>名称</th><th>Ready</th><th>镜像</th><th>Age</th><th>Pods(running/total)</th></tr></thead>
+    <tbody id="tb-sts"></tbody>
+  </table></div>
+
+  <h3 class="section-title">DaemonSet</h3>
+  <div class="tblwrap"><table class="tbl">
+    <thead><tr><th>名称</th><th>Ready</th><th>镜像</th><th>Age</th><th>Pods(running/total)</th></tr></thead>
+    <tbody id="tb-ds"></tbody>
+  </table></div>
+
+  <h3 class="section-title">Service</h3>
+  <div class="tblwrap"><table class="tbl">
+    <thead><tr><th>名称</th><th>Type</th><th>ClusterIP</th><th>External</th><th>Ports</th><th>Age</th></tr></thead>
+    <tbody id="tb-svc"></tbody>
+  </table></div>
+</section>
+
+<!-- 日志弹窗 -->
+<dialog id="logdlg">
+  <div class="dlg-head">
+    <b id="log-title" class="mono"></b>
+    <select id="log-container"></select>
+    <select id="log-tail">
+      <option value="200">最后 200 行</option>
+      <option value="500" selected>最后 500 行</option>
+      <option value="2000">最后 2000 行</option>
+    </select>
+    <label><input type="checkbox" id="log-prev"> 上一次容器</label>
+    <button id="log-reload">刷新</button>
+    <button id="log-close">关闭</button>
+  </div>
+  <pre id="log-body"></pre>
+</dialog>
+
+<script src="/static/app.js?v=4"></script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: task-board
+  namespace: task-pipeline
+  # annotations:                       # 按你的 Ingress 控制器需要再加
+  #   cert-manager.io/cluster-issuer: letsencrypt   # 自动签 HTTPS 证书（装了 cert-manager 才用）
+spec:
+  # ingressClassName: traefik          # k3s 默认是 traefik；有多个控制器时取消注释并改成实际名字
+  rules:
+    - host: task-board.mp.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: task-board
+                port: { number: 80 }
+  # HTTPS：先创建 TLS Secret（或用 cert-manager），再取消下面注释
+  # tls:
+  #   - hosts: [task-board.mp.com]
+  #     secretName: task-board-tls

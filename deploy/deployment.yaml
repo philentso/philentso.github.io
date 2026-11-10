@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: task-board
+  namespace: task-pipeline
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: task-board }
+  template:
+    metadata:
+      labels: { app: task-board }
+    spec:
+      serviceAccountName: task-board
+      containers:
+        - name: ui
+          # 镜像名/tag 按你的实际构建结果改
+          image: harbor.polypredict.online:30443/feagine-pub/task-board:release-20261111
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8080 }]
+          env:
+            - { name: NAMESPACE,        value: "task-pipeline" }
+            - { name: DISPLAY_TZ,       value: "Asia/Shanghai" }
+            - { name: COMPANY_NAME,     value: "Myproject" }
+            - { name: PIPELINE_NAME,    value: "mp-task-board" }
+            - { name: REFRESH_INTERVAL, value: "5" }     # 后台每 5 秒向 k8s 拉一次数据
+            - { name: ENABLE_LOGS,      value: "0" }     # 想在页面看日志改成 "1"，建议先配好下面的登录
+            # 可选登录（Basic 认证）。先创建 Secret：
+            #   kubectl -n task-pipeline create secret generic task-board-auth \
+            #     --from-literal=user=admin --from-literal=pass='换成你的密码'
+            # Secret 不存在时下面两项为空，等于不启用登录。
+            - name: UI_USER
+              valueFrom: { secretKeyRef: { name: task-board-auth, key: user, optional: true } }
+            - name: UI_PASS
+              valueFrom: { secretKeyRef: { name: task-board-auth, key: pass, optional: true } }
+          resources:
+            requests: { cpu: "100m", memory: "192Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 20
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: task-board
+  namespace: task-pipeline
+spec:
+  type: ClusterIP            # 走 Ingress 访问，不再暴露 NodePort（避免绕过 Ingress 直连）
+  selector: { app: task-board }
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

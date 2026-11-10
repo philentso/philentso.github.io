@@ -1,0 +1,5 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+kubernetes==31.0.0
+croniter==3.0.3
+tzdata==2024.2
