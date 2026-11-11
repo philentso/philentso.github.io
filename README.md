@@ -25,7 +25,7 @@
 
 ```
 philentso.github.io/
-├── requirements.txt        # Python 依赖
+├── requirements.txt        # 安装 Python 依赖
 ├── Dockerfile              # 容器构建文件
 ├── app/
 │   ├── __init__.py
