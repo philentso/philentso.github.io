@@ -1,6 +1,6 @@
 # Myproject · mp-task-board 流水线看板
 
-这是一个专为 K8s 数据处理流水线设计的轻量级 Web 可视化管理面板。不仅能够实时查看各业务线的任务状态、运行中的 Pod, 还能看到健康（成功率）状态，运行错误等信息，更直观的看到当前业务命名空间下的 Cronjob 运行状况。
+这是一个专为 K8s 数据处理流水线设计的轻量级 Web 可视化管理面板。不仅能够实时查看各业务线的任务状态、运行中的 Pod, 还能看到健康（成功率）状态，运行错误等信息，更直观的看到当前业务命名空间下的 Cronjob 运行状况。你想了解更多项目信息，请访问 Pages: https://philentso.github.io/.
 
 ## 核心功能
 
@@ -114,10 +114,9 @@ kubectl -n gpu-pipeline port-forward svc/myproject-pipeline-ui 8080:80
 - 检查 `curl http://127.0.0.1:8080/api/overview` 是否有 JSON 返回
 - 若有 K8s API 报错，通常是 kubeconfig 权限不足，或在集群内未正确绑定 ServiceAccount
 
-### 2. 历史记录数据为空
+### 2. 页面有时缓慢
 
 - 系统每被请求一次 `/api/overview`，就会抓取一次当前状态入库。请等待几秒钟并刷新页面。
-- 检查项目根目录是否生成了 `pipeline.db` 文件。
 
 ### 3. 请求一直 pending 卡住
 
