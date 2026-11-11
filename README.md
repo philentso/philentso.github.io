@@ -1,10 +1,10 @@
 # Myproject · mp-task-board 流水线看板
 
-这是一个专为 K8s 数据处理流水线设计的轻量级 Web 可视化管理面板。不仅能够实时查看各业务线的任务状态、运行中的 Pod，还内置了 SQLite 本地持久化存储，解决 K8s 默认 GC 机制导致历史 Job/Pod 被清理而无法回溯的问题。
+这是一个专为 K8s 数据处理流水线设计的轻量级 Web 可视化管理面板。不仅能够实时查看各业务线的任务状态、运行中的 Pod, 还能看到健康（成功率）状态，运行错误等信息，更直观的看到当前业务命名空间下的 Cronjob 运行状况。
 
 ## 核心功能
 
-- **任务总览**：自动关联 CronJob 与 Job，展示 Schedule、下次执行时间、上次耗时及成功率，支持按业务前缀（如 `oai`、`semantic`、`pkg3` 等）分组过滤。
+- **任务总览**：自动关联 CronJob 与 Job，展示 Schedule、下次执行时间、上次耗时及成功率，支持按业务前缀（如 `cpu-pg`、`gpu-qa`、`gpu-source` 等）分组过滤。
 - **运行中 Pod**：实时监控当前运行的所有 Pod，包括所属 Owner、已运行时长、重启次数、异常容器状态（如 `CrashLoopBackOff`）。
 - **常驻服务**：全面覆盖并展示 Deployment、StatefulSet、DaemonSet、Service，直观查看 Ready 状态、镜像及 Pod 存活比例。
 - **高并发优化**：后端采用线程池并发拉取 K8s API 并自带超时限制；前端采用防抖与并发锁，防止请求堆积卡死。
