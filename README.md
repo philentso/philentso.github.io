@@ -24,7 +24,7 @@
 ## 目录结构
 
 ```
-myproject-pipeline-ui/
+philentso.github.io/
 ├── requirements.txt        # Python 依赖
 ├── Dockerfile              # 容器构建文件
 ├── app/
